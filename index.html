@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Outreach Clock</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo+Mono:wght@400;500;700&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+  /* Layout: BDT clock + "send now" summary, then one ledger per region; each city row = name & DST, clock & BDT difference, status & 24-hour track. Single white theme. */
+  :root {
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --tint: #f5f7fa;
+    --ink: #141b27;
+    --muted: #4f5b6b;
+    --line: #d5dbe4;
+    --accent: #2440b8;
+    --best: #0a6646;
+    --best-bg: #dcf3e9;
+    --best-bar: #2f9a72;
+    --biz: #2440b8;
+    --biz-bg: #e3e8fb;
+    --early: #7d4700;
+    --early-bg: #fbecd2;
+    --off: #4f5866;
+    --off-bg: #e9ecf1;
+    --track: #e6e9ef;
+    --font-clock: "Chivo Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+    --font-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body {
+    background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 28px 48px;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: 28px; }
+
+  header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px; }
+  h1 { margin: 0; font-size: 1.9rem; line-height: 1.1; letter-spacing: -0.02em; text-wrap: balance; }
+  .lede { margin: 6px 0 0; color: var(--muted); max-width: 60ch; }
+  .you { text-align: right; background: var(--tint); border: 1px solid var(--line); border-radius: 12px; padding: 10px 16px; }
+  .lbl, .eyebrow { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); font-weight: 700; margin: 0; }
+  .you .t { font-family: var(--font-clock); font-size: 1.5rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .you .z { color: var(--muted); font-size: 0.85rem; }
+
+  .now { background: var(--tint); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; display: grid; gap: 10px; }
+  .now h2 { margin: 0; font-size: 1.05rem; }
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
+  .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .pill small { font-weight: 500; font-size: 0.8rem; }
+  .s-best { color: var(--best); background: var(--best-bg); }
+  .s-biz { color: var(--biz); background: var(--biz-bg); }
+  .s-early { color: var(--early); background: var(--early-bg); }
+  .s-off { color: var(--off); background: var(--off-bg); }
+  .none { color: var(--muted); margin: 0; }
+
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .filters button {
+    font: inherit; font-weight: 600; font-size: 0.9rem; padding: 7px 14px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink); min-height: 36px;
+  }
+  .filters button:hover { border-color: var(--muted); }
+  .filters button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  section.region { display: grid; gap: 10px; }
+  .region-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .region-head h2 { margin: 0; font-size: 1.2rem; }
+  .region-head span { color: var(--muted); font-size: 0.85rem; }
+  .ledger { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+
+  .city {
+    display: grid; grid-template-columns: minmax(170px, 1.1fr) minmax(190px, 1fr) minmax(230px, 1.6fr);
+    gap: 10px 20px; align-items: center; padding: 16px 20px;
+  }
+  .city + .city { border-top: 1px solid var(--line); }
+  .city h3 { margin: 0; font-weight: 700; font-size: 1.05rem; }
+  .city .also { color: var(--muted); font-size: 0.85rem; }
+  .city .zone { color: var(--muted); font-size: 0.8rem; font-family: var(--font-clock); }
+  .dst { display: inline-block; margin-top: 4px; font-size: 0.75rem; font-weight: 600; padding: 1px 8px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); }
+  .dst.on { color: var(--early); background: var(--early-bg); border-color: transparent; }
+  .clock { font-family: var(--font-clock); font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .clock .hm { font-size: 1.9rem; font-weight: 500; letter-spacing: -0.02em; }
+  .clock .sec { font-size: 1rem; color: var(--muted); }
+  .clock .ap { font-size: 1rem; font-weight: 700; margin-left: 4px; }
+  .clock .day { display: block; font-family: var(--font-body); font-size: 0.85rem; color: var(--muted); margin-top: 4px; }
+  .diff { display: inline-flex; gap: 6px; align-items: baseline; margin-top: 6px; font-family: var(--font-body); font-size: 0.85rem; font-weight: 600; color: var(--accent); background: var(--biz-bg); padding: 2px 8px; border-radius: 6px; }
+  .diff b { font-family: var(--font-clock); }
+  .state { display: grid; gap: 8px; min-width: 0; }
+  .state .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+  .hint { font-size: 0.85rem; color: var(--muted); }
+  .hint b { color: var(--ink); font-weight: 600; }
+
+  .track { position: relative; height: 10px; border-radius: 5px; background: var(--track); }
+  .track .band { position: absolute; top: 0; bottom: 0; border-radius: 5px; }
+  .track .b-biz { background: var(--biz-bg); box-shadow: inset 0 0 0 1px #b9c5f0; }
+  .track .b-best { background: var(--best-bar); }
+  .track.weekend .band { opacity: 0.3; }
+  .track .needle { position: absolute; top: -4px; bottom: -4px; width: 3px; margin-left: -1.5px; border-radius: 2px; background: var(--ink); }
+  .ticks { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--muted); font-family: var(--font-clock); margin-top: 3px; }
+
+  .planner { background: var(--tint); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; display: grid; gap: 14px; }
+  .planner h2 { margin: 0; font-size: 1.05rem; }
+  .form { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+  .field { display: grid; gap: 4px; }
+  .field label { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
+  select, input[type="time"] {
+    font: inherit; padding: 7px 10px; border-radius: 8px; border: 1px solid #8a94a3; background: var(--surface); color: var(--ink); min-height: 38px;
+  }
+  .check { display: flex; align-items: center; gap: 6px; font-size: 0.9rem; padding-bottom: 8px; }
+  .check input { width: 18px; height: 18px; accent-color: var(--accent); }
+  .result { font-size: 1rem; }
+  .result .big { font-family: var(--font-clock); font-size: 1.3rem; font-weight: 700; color: var(--accent); }
+
+  .legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; font-size: 0.85rem; color: var(--muted); margin: 0; padding: 0; list-style: none; }
+  .legend li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  footer { color: var(--muted); font-size: 0.85rem; }
+
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  @media (max-width: 760px) {
+    .city { grid-template-columns: 1fr auto; }
+    .city .state { grid-column: 1 / -1; }
+    .clock { text-align: right; }
+    .you { text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+<main class="wrap">
+  <header>
+    <div>
+      <h1>Outreach Clock</h1>
+      <p class="lede">Live local time for agency hubs in the US, Australia and the UK, compared with Bangladesh time, so your cold emails land when the recipient is at their desk.</p>
+    </div>
+    <div class="you">
+      <p class="lbl">Bangladesh time (BDT)</p>
+      <div class="t" id="you-time">--:--:-- --</div>
+      <div class="z" id="you-zone">Dhaka · UTC+6 · no daylight saving</div>
+    </div>
+  </header>
+
+  <section class="now" aria-labelledby="now-title">
+    <p class="eyebrow">Send now</p>
+    <h2 id="now-title">Cities in their best window</h2>
+    <div class="pills" id="now-best"></div>
+    <p class="eyebrow" style="margin-top:6px">Open for business</p>
+    <div class="pills" id="now-biz"></div>
+  </section>
+
+  <div class="filters" role="group" aria-label="Show region">
+    <button type="button" data-f="all" aria-pressed="true">All regions</button>
+    <button type="button" data-f="us" aria-pressed="false">United States</button>
+    <button type="button" data-f="au" aria-pressed="false">Australia</button>
+    <button type="button" data-f="uk" aria-pressed="false">United Kingdom</button>
+  </div>
+
+  <div id="regions" class="wrap" style="gap:28px"></div>
+
+  <section class="planner" aria-labelledby="plan-title">
+    <p class="eyebrow">Schedule send</p>
+    <h2 id="plan-title">When should I hit "schedule" in Bangladesh?</h2>
+    <div class="form">
+      <div class="field">
+        <label for="p-city">Recipient city</label>
+        <select id="p-city"></select>
+      </div>
+      <div class="field">
+        <label for="p-time">Their local time</label>
+        <input type="time" id="p-time" value="09:00">
+      </div>
+      <label class="check"><input type="checkbox" id="p-weekday" checked> Weekdays only</label>
+    </div>
+    <div class="result" id="p-result" aria-live="polite"></div>
+  </section>
+
+  <ul class="legend" aria-label="Status meaning">
+    <li><span class="pill s-best"><span class="dot"></span>Best time</span> 8–11 AM weekdays</li>
+    <li><span class="pill s-biz"><span class="dot"></span>Business hours</span> 11 AM–5 PM</li>
+    <li><span class="pill s-early"><span class="dot"></span>Early</span> 6–8 AM, schedule for 8 AM</li>
+    <li><span class="pill s-off"><span class="dot"></span>After hours / Weekend</span> hold the email</li>
+  </ul>
+
+  <footer>Differences use each city's current UTC offset, read from your browser's time zone database. When the US, UK or Australia switches daylight saving on or off, the clocks, the daylight saving badges and the BDT differences update by themselves. Bangladesh stays on UTC+6 all year. Phoenix, Brisbane and Perth don't observe daylight saving.</footer>
+</main>
+
+<script>
+(function () {
+  var BDT = "Asia/Dhaka";
+  var CITIES = [
+    { id: "nyc", region: "us", name: "New York", also: "Boston, Miami, Atlanta", tz: "America/New_York", loc: "en-US" },
+    { id: "chi", region: "us", name: "Chicago", also: "Austin, Dallas, Houston", tz: "America/Chicago", loc: "en-US" },
+    { id: "den", region: "us", name: "Denver", also: "Salt Lake City, Boise", tz: "America/Denver", loc: "en-US" },
+    { id: "phx", region: "us", name: "Phoenix", also: "Arizona", tz: "America/Phoenix", loc: "en-US" },
+    { id: "la", region: "us", name: "Los Angeles", also: "San Francisco, Seattle, San Diego", tz: "America/Los_Angeles", loc: "en-US" },
+    { id: "syd", region: "au", name: "Sydney", also: "Melbourne, Canberra", tz: "Australia/Sydney", loc: "en-AU" },
+    { id: "bne", region: "au", name: "Brisbane", also: "Gold Coast", tz: "Australia/Brisbane", loc: "en-AU" },
+    { id: "adl", region: "au", name: "Adelaide", also: "South Australia", tz: "Australia/Adelaide", loc: "en-AU" },
+    { id: "per", region: "au", name: "Perth", also: "Western Australia", tz: "Australia/Perth", loc: "en-AU" },
+    { id: "lon", region: "uk", name: "London", also: "Manchester, Birmingham, Edinburgh", tz: "Europe/London", loc: "en-GB" }
+  ];
+  var REGIONS = [
+    { id: "us", name: "United States" },
+    { id: "au", name: "Australia" },
+    { id: "uk", name: "United Kingdom" }
+  ];
+  var WD = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+  var fmtCache = {};
+  function partsFmt(tz) {
+    return fmtCache[tz] || (fmtCache[tz] = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz, hourCycle: "h23", weekday: "short", hour: "2-digit", minute: "2-digit", second: "2-digit",
+      month: "short", day: "numeric"
+    }));
+  }
+  function wall(tz, date) {
+    var o = {};
+    partsFmt(tz).formatToParts(date).forEach(function (p) { o[p.type] = p.value; });
+    return { h: +o.hour % 24, m: +o.minute, s: +o.second, wd: WD[o.weekday], wdName: o.weekday, month: o.month, day: o.day };
+  }
+  // UTC offset in minutes for a zone at a given instant, e.g. New York in winter = -300.
+  var offFmt = {};
+  function offsetMin(tz, date) {
+    var f = offFmt[tz] || (offFmt[tz] = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "shortOffset" }));
+    var v = f.formatToParts(date).find(function (p) { return p.type === "timeZoneName"; }).value;
+    var m = /GMT([+-])(\d{1,2})(?::(\d{2}))?/.exec(v);
+    if (!m) return 0;
+    var mins = (+m[2]) * 60 + (+(m[3] || 0));
+    return m[1] === "-" ? -mins : mins;
+  }
+  function fmtOffset(mins) {
+    var sign = mins < 0 ? "−" : "+", a = Math.abs(mins), h = Math.floor(a / 60), m = a % 60;
+    return "UTC" + sign + h + (m ? ":" + pad(m) : "");
+  }
+  function abbr(c, date) {
+    var a = new Intl.DateTimeFormat(c.loc, { timeZone: c.tz, timeZoneName: "short" })
+      .formatToParts(date).find(function (p) { return p.type === "timeZoneName"; }).value;
+    var off = fmtOffset(offsetMin(c.tz, date));
+    return /^(GMT|UTC)[+-]/.test(a) ? off : a + " · " + off;
+  }
+  // Does the zone observe DST this year, and is it on now?
+  function dstInfo(tz, date) {
+    var y = date.getUTCFullYear();
+    var jan = offsetMin(tz, new Date(Date.UTC(y, 0, 15))), jul = offsetMin(tz, new Date(Date.UTC(y, 6, 15)));
+    if (jan === jul) return { observes: false, on: false };
+    return { observes: true, on: offsetMin(tz, date) === Math.max(jan, jul) };
+  }
+  function h12(h) { return { h: (h % 12) || 12, ap: h < 12 ? "AM" : "PM" }; }
+  function pad(n) { return n < 10 ? "0" + n : "" + n; }
+  function hm(mins) { // minutes after midnight (any range) -> "7:00 PM"
+    var d = ((mins % 1440) + 1440) % 1440, t = h12(Math.floor(d / 60));
+    return t.h + ":" + pad(d % 60) + " " + t.ap;
+  }
+  function diffText(d) { // city offset minus BDT offset
+    if (d === 0) return "Same time as BDT";
+    var a = Math.abs(d), h = Math.floor(a / 60), m = a % 60;
+    return (h ? h + "h" : "") + (m ? " " + m + "m" : "") + (d < 0 ? " behind BDT" : " ahead of BDT");
+  }
+
+  function status(w) {
+    var mins = w.h * 60 + w.m;
+    if (w.wd === 0 || w.wd === 6) return { k: "off", label: "Weekend" };
+    if (mins >= 480 && mins < 660) return { k: "best", label: "Best time" };
+    if (mins >= 660 && mins < 1020) return { k: "biz", label: "Business hours" };
+    if (mins >= 360 && mins < 480) return { k: "early", label: "Early" };
+    return { k: "off", label: "After hours" };
+  }
+
+  // Seconds from now until the city's wall clock next reads targetMin (minutes after midnight).
+  function secsUntil(tz, targetMin, weekdaysOnly, now) {
+    var w = wall(tz, now);
+    var nowSec = w.h * 3600 + w.m * 60 + w.s;
+    for (var d = 0; d < 8; d++) {
+      var wd = (w.wd + d) % 7;
+      if (weekdaysOnly && (wd === 0 || wd === 6)) continue;
+      var diff = d * 86400 + targetMin * 60 - nowSec;
+      if (diff > 0) return diff;
+    }
+    return null;
+  }
+  function dur(sec) {
+    var m = Math.round(sec / 60), h = Math.floor(m / 60), mm = m % 60;
+    if (h >= 24) { var d = Math.floor(h / 24); return d + "d " + (h % 24) + "h"; }
+    return h ? h + "h " + mm + "m" : mm + "m";
+  }
+  var bdtShort = new Intl.DateTimeFormat("en-US", { timeZone: BDT, weekday: "short", hour: "numeric", minute: "2-digit", hour12: true });
+  var bdtLong = new Intl.DateTimeFormat("en-US", { timeZone: BDT, weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
+
+  // Build DOM once
+  var regionsEl = document.getElementById("regions");
+  var rows = {};
+  REGIONS.forEach(function (r) {
+    var sec = document.createElement("section");
+    sec.className = "region"; sec.dataset.region = r.id;
+    sec.setAttribute("aria-labelledby", "rg-" + r.id);
+    var cities = CITIES.filter(function (c) { return c.region === r.id; });
+    sec.innerHTML = '<div class="region-head"><h2 id="rg-' + r.id + '">' + r.name + '</h2><span>' + cities.length +
+      (cities.length === 1 ? " time zone" : " time zones") + '</span></div><div class="ledger"></div>';
+    var ledger = sec.querySelector(".ledger");
+    cities.forEach(function (c) {
+      var row = document.createElement("article");
+      row.className = "city";
+      row.setAttribute("aria-label", c.name);
+      row.innerHTML =
+        '<div><h3>' + c.name + '</h3><div class="also">' + c.also + '</div><div class="zone" data-z></div><span class="dst" data-dst></span></div>' +
+        '<div class="clock"><span class="hm" data-hm>--:--</span><span class="sec" data-s>:--</span><span class="ap" data-ap></span><span class="day" data-day></span><span class="diff" data-diff></span></div>' +
+        '<div class="state"><div class="row"><span class="pill" data-pill><span class="dot"></span><span data-pl></span></span><span class="hint" data-hint></span></div>' +
+        '<div class="hint" data-win></div>' +
+        '<div aria-hidden="true"><div class="track" data-track><div class="band b-biz" style="left:' + (8 / 24 * 100) + '%;width:' + (9 / 24 * 100) + '%"></div>' +
+        '<div class="band b-best" style="left:' + (8 / 24 * 100) + '%;width:' + (3 / 24 * 100) + '%"></div><div class="needle" data-needle></div></div>' +
+        '<div class="ticks"><span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>12a</span></div></div></div>';
+      ledger.appendChild(row);
+      var q = function (s) { return row.querySelector("[" + s + "]"); };
+      rows[c.id] = { z: q("data-z"), dst: q("data-dst"), hm: q("data-hm"), s: q("data-s"), ap: q("data-ap"), day: q("data-day"), diff: q("data-diff"),
+        pill: q("data-pill"), pl: q("data-pl"), hint: q("data-hint"), win: q("data-win"), track: q("data-track"), needle: q("data-needle") };
+    });
+    regionsEl.appendChild(sec);
+  });
+
+  // Filters
+  var filterBtns = document.querySelectorAll(".filters button");
+  function applyFilter(f) {
+    filterBtns.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.f === f)); });
+    regionsEl.querySelectorAll("section.region").forEach(function (s) { s.hidden = !(f === "all" || s.dataset.region === f); });
+    try { localStorage.setItem("oc-filter", f); } catch (e) {}
+  }
+  filterBtns.forEach(function (b) { b.addEventListener("click", function () { applyFilter(b.dataset.f); }); });
+  try { var saved = localStorage.getItem("oc-filter"); if (saved) applyFilter(saved); } catch (e) {}
+
+  // Planner
+  var pCity = document.getElementById("p-city"), pTime = document.getElementById("p-time"),
+      pWd = document.getElementById("p-weekday"), pRes = document.getElementById("p-result");
+  CITIES.forEach(function (c) {
+    var o = document.createElement("option"); o.value = c.id; o.textContent = c.name; pCity.appendChild(o);
+  });
+  function plan(now) {
+    var c = CITIES.find(function (x) { return x.id === pCity.value; });
+    var v = (pTime.value || "09:00").split(":");
+    var target = (+v[0]) * 60 + (+v[1]);
+    var s = secsUntil(c.tz, target, pWd.checked, now);
+    if (s == null) { pRes.textContent = ""; return; }
+    var when = new Date(now.getTime() + s * 1000);
+    var w = wall(c.tz, when);
+    pRes.innerHTML = 'For <b>' + hm(target) + '</b> on ' + w.wdName + ' in ' + c.name +
+      ', schedule it for <span class="big">' + bdtLong.format(when) + '</span> BDT <span class="hint">(in ' + dur(s) + ')</span>';
+  }
+  [pCity, pTime, pWd].forEach(function (el) { el.addEventListener("input", function () { plan(new Date()); }); });
+
+  function pillHTML(c, w, bw) {
+    var t = h12(w.h);
+    return '<span class="pill s-' + status(w).k + '"><span class="dot"></span>' + c.name + ' ' + t.h + ':' + pad(w.m) + ' ' + t.ap +
+      ' <small>(' + bw + ' BDT)</small></span>';
+  }
+
+  var lastMinute = -1;
+  function tick() {
+    var now = new Date();
+    var bw = wall(BDT, now), bt = h12(bw.h), bdtOff = offsetMin(BDT, now);
+    var bdtNow = bt.h + ":" + pad(bw.m) + " " + bt.ap;
+    document.getElementById("you-time").textContent = bt.h + ":" + pad(bw.m) + ":" + pad(bw.s) + " " + bt.ap;
+    document.getElementById("you-zone").textContent = bw.wdName + ", " + bw.month + " " + bw.day + " · Dhaka · UTC+6 · no daylight saving";
+
+    var best = [], biz = [];
+    CITIES.forEach(function (c) {
+      var r = rows[c.id], w = wall(c.tz, now), t = h12(w.h), st = status(w);
+      var off = offsetMin(c.tz, now), d = off - bdtOff, dst = dstInfo(c.tz, now);
+      r.hm.textContent = pad(t.h) + ":" + pad(w.m);
+      r.s.textContent = ":" + pad(w.s);
+      r.ap.textContent = t.ap;
+      r.day.textContent = w.wdName + ", " + w.month + " " + w.day;
+      r.z.textContent = abbr(c, now);
+      r.dst.textContent = !dst.observes ? "No daylight saving" : dst.on ? "Daylight saving on" : "Daylight saving off";
+      r.dst.className = "dst" + (dst.on ? " on" : "");
+      r.diff.textContent = diffText(d);
+      r.pill.className = "pill s-" + st.k;
+      r.pl.textContent = st.label;
+      r.track.classList.toggle("weekend", w.wd === 0 || w.wd === 6);
+      r.needle.style.left = ((w.h * 3600 + w.m * 60 + w.s) / 864) + "%";
+      // 8–11 AM in the city, expressed in BDT using today's offsets
+      r.win.innerHTML = "Their 8–11 AM = <b>" + hm(480 - d) + "–" + hm(660 - d) + "</b> BDT";
+      if (st.k === "best") {
+        var left = 660 * 60 - (w.h * 3600 + w.m * 60 + w.s);
+        r.hint.innerHTML = "Window closes in <b>" + dur(left) + "</b>";
+        best.push(pillHTML(c, w, bdtNow));
+      } else {
+        if (st.k === "biz") biz.push(pillHTML(c, w, bdtNow));
+        var s = secsUntil(c.tz, 480, true, now);
+        r.hint.innerHTML = "Best window in <b>" + dur(s) + "</b> · " + bdtShort.format(new Date(now.getTime() + s * 1000)) + " BDT";
+      }
+    });
+    document.getElementById("now-best").innerHTML = best.length ? best.join("") : '<p class="none">No city is in its 8–11 AM window right now. Check the next window on each city below.</p>';
+    document.getElementById("now-biz").innerHTML = biz.length ? biz.join("") : '<p class="none">No city is in business hours right now.</p>';
+
+    if (now.getMinutes() !== lastMinute) { lastMinute = now.getMinutes(); plan(now); }
+  }
+  tick();
+  setTimeout(function () { tick(); setInterval(tick, 1000); }, 1000 - (Date.now() % 1000));
+})();
+</script>
+</body>
+</html>
